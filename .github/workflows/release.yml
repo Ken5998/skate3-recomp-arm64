@@ -1,0 +1,55 @@
+name: Launcher release
+
+# Publishes the launcher for ARM64 Linux as release vVERSION (the version in
+# launcher/Cargo.toml). The launcher holds no game files and no build
+# scripts: on the device it fetches this repository's scripts and patches and
+# builds the game from the player's own disc.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  launcher:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Install Rust
+        run: |
+          command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Build and pack the launcher
+        run: scripts/package-launcher.sh out
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive=out/Skate3Recomp-Launcher-linux-arm64.tar.gz
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' launcher/Cargo.toml | head -1)"
+          sha256="$(sha256sum "$archive" | cut -d' ' -f1)"
+          scripts/release-notes.sh "v$version" > notes.md
+          cat >> notes.md <<NOTES
+          ## Dropping in
+
+          You need your own Skate 3 disc for Xbox 360 as an ISO and about 25 GB free on the handheld.
+
+          - In Desktop Mode, unpack Skate3Recomp-Launcher-linux-arm64.tar.gz, open Skate3Recomp/skate3-launcher, pick the ISO and press **Build**. Keep the charger in: the whole game is compiled on the device.
+          - The build copies the disc's files into game-dist/game (the ISO can go afterwards) and downloads Title Update 3 from xboxunity.net, as the game's own installer does.
+          - When it is done, "Skate 3" is in your Steam library. Start it from there so the pad works; artwork is up to you (SteamGridDB).
+
+          The game draws with Skate 3 Recomp's native Vulkan renderer at 720p, with MSAA, SSAO and light shafts off for a start (game-dist/skate3.toml, or Settings in the game: Escape or RB + Start). F5 switches to the emulated Xbox 360 GPU if something looks wrong.
+
+          Launcher SHA-256: \`$sha256\`. No game files are included.
+          NOTES
+          if gh release view "v$version" > /dev/null 2>&1; then
+            gh release upload "v$version" "$archive" --clobber
+            gh release edit "v$version" --notes-file notes.md
+          else
+            gh release create "v$version" "$archive" --title "Skate 3 launcher $version for ARM64 Linux" \
+              --notes-file notes.md --target "$GITHUB_SHA" --latest
+          fi
