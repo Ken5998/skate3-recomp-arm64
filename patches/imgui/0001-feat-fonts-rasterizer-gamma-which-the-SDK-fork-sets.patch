@@ -1,0 +1,67 @@
+From 98d1f0681e7a9c40977ae938b8104f0e2e53e8f8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 16:50:34 +0000
+Subject: [PATCH] feat(fonts): rasterizer gamma, which the SDK fork sets
+
+The Skate 3 SDK fork pins an imgui commit that was never published; the
+only field its code needs from it is ImFontConfig::RasterizerGamma, a
+coverage curve (alpha^gamma) for light-on-dark text.
+---
+ imgui.h        |  1 +
+ imgui_draw.cpp | 23 +++++++++++++++++++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/imgui.h b/imgui.h
+index be945c611..16d972586 100644
+--- a/imgui.h
++++ b/imgui.h
+@@ -3538,6 +3538,7 @@ struct ImFontConfig
+     ImU32           FontNo;                 // 0        // Index of font within TTF/OTF file
+     unsigned int    FontLoaderFlags;        // 0        // Settings for custom font builder. THIS IS BUILDER IMPLEMENTATION DEPENDENT. Leave as zero if unsure.
+     //unsigned int  FontBuilderFlags;       // --       // [Renamed in 1.92] Ue FontLoaderFlags.
++    float           RasterizerGamma;        // 1.0f     // Coverage curve: alpha = alpha^RasterizerGamma (< 1.0f makes light-on-dark text fuller). Added for the ReXGlue SDK.
+     float           RasterizerMultiply;     // 1.0f     // Linearly brighten (>1.0f) or darken (<1.0f) font output. Brightening small fonts may be a good workaround to make them more readable. This is a silly thing we may remove in the future.
+     float           RasterizerDensity;      // 1.0f     // [LEGACY: this only makes sense when ImGuiBackendFlags_RendererHasTextures is not supported] DPI scale multiplier for rasterization. Not altering other font metrics: makes it easy to swap between e.g. a 100% and a 400% fonts for a zooming display, or handle Retina screen. IMPORTANT: If you change this it is expected that you increase/decrease font scale roughly to the inverse of this, otherwise quality may look lowered.
+ 
+diff --git a/imgui_draw.cpp b/imgui_draw.cpp
+index de6462295..7b9a30381 100644
+--- a/imgui_draw.cpp
++++ b/imgui_draw.cpp
+@@ -2417,6 +2417,7 @@ ImFontConfig::ImFontConfig()
+     OversampleV = 0; // Auto == 1
+     GlyphMaxAdvanceX = FLT_MAX;
+     RasterizerMultiply = 1.0f;
++    RasterizerGamma = 1.0f;
+     RasterizerDensity = 1.0f;
+     EllipsisChar = 0;
+ }
+@@ -2883,6 +2884,28 @@ void ImFontAtlasTextureBlockPostProcess(ImFontAtlasPostProcessData* data)
+     // Multiply operator (legacy)
+     if (data->FontSrc->RasterizerMultiply != 1.0f)
+         ImFontAtlasTextureBlockPostProcessMultiply(data, data->FontSrc->RasterizerMultiply);
++    // Coverage curve (ReXGlue SDK)
++    if (data->FontSrc->RasterizerGamma > 0.0f && data->FontSrc->RasterizerGamma != 1.0f)
++    {
++        unsigned char table[256];
++        for (int i = 0; i < 256; i++)
++            table[i] = (unsigned char)ImClamp((int)(ImPow(i / 255.0f, data->FontSrc->RasterizerGamma) * 255.0f + 0.5f), 0, 255);
++        unsigned char* pixels = (unsigned char*)data->Pixels;
++        for (int ny = data->Height; ny > 0; ny--, pixels += data->Pitch)
++        {
++            if (data->Format == ImTextureFormat_Alpha8)
++            {
++                for (int nx = 0; nx < data->Width; nx++)
++                    pixels[nx] = table[pixels[nx]];
++            }
++            else if (data->Format == ImTextureFormat_RGBA32)
++            {
++                ImU32* p = (ImU32*)(void*)pixels;
++                for (int nx = 0; nx < data->Width; nx++, p++)
++                    *p = (*p & ~IM_COL32_A_MASK) | ((ImU32)table[(*p >> IM_COL32_A_SHIFT) & 0xFF] << IM_COL32_A_SHIFT);
++            }
++        }
++    }
+ }
+ 
+ void ImFontAtlasTextureBlockPostProcessMultiply(ImFontAtlasPostProcessData* data, float multiply_factor)

@@ -1,0 +1,28 @@
+# Skate 3 Recomp on a handheld (Retroid Pocket 6 class: Adreno 740, 1080p
+# screen). scripts/build.sh puts this beside the game the first time only;
+# your edits stay. The game reads it before its own settings file
+# (Settings in the game, or Escape / RB+Start), so these are the defaults of
+# a first start: change things in the game's menu afterwards.
+
+# Upstream starts at 2x the Xbox 360's 720p; 1x is what a handheld can carry.
+resolution_scale = 1
+draw_resolution_scale_x = 1
+draw_resolution_scale_y = 1
+
+fullscreen = true
+vsync = true
+video_mode_refresh_rate = 60.0
+
+# The native renderer (upstream's default, much lighter than the emulated
+# Xbox 360 GPU), without the PC extras that cost the most GPU time.
+skate3_native_render = true
+skate3_native_render_scene_msaa = 1
+skate3_native_render_scene_ssao = false
+skate3_native_render_scene_shafts = false
+skate3_native_render_scene_ssr = false
+skate3_draw_distance_scale = 1.0
+skate3_lod_distance_scale = 1.0
+
+# On Linux the game always reads controllers through SDL.
+input_backend = "sdl"
+mnk_mode = false

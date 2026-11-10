@@ -1,0 +1,35 @@
+From 402b9ef6e811e209e032a4d859d2e138349bc8be Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kenan=20Kasumovi=C4=87?=
+ <46025606+Ken5998@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 17:05:20 +0000
+Subject: [PATCH] fix(linux): bind ffmpeg's arm64 assembly locally in
+ librexruntime
+
+---
+ thirdparty/CMakeLists.txt | 8 ++++++++
+ thirdparty/imgui          | 2 +-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/thirdparty/CMakeLists.txt b/thirdparty/CMakeLists.txt
+index f076b0d..93c8e58 100644
+--- a/thirdparty/CMakeLists.txt
++++ b/thirdparty/CMakeLists.txt
+@@ -721,3 +721,11 @@ endif()
+ 
+ # IDE folder organization
+ set_target_properties(libavutil libavcodec PROPERTIES FOLDER "FFmpeg")
++# The .S files' symbols stay preemptible in a shared object, so their
++# position-dependent references to ff_cos_* and their branches to each other
++# cannot link into librexruntime.so on Linux ("recompile with -fPIC",
++# "R_AARCH64_CONDBR19 out of range"). Hiding every symbol of the two archives
++# in whatever links them binds them locally.
++if(IS_ARM64 AND UNIX AND NOT APPLE)
++    target_link_options(libavcodec INTERFACE "LINKER:--exclude-libs,liblibavcodec.a:liblibavutil.a")
++endif()
+diff --git a/thirdparty/imgui b/thirdparty/imgui
+index cdda623..98d1f06 160000
+--- a/thirdparty/imgui
++++ b/thirdparty/imgui
+@@ -1 +1 @@
+-Subproject commit cdda62349d6068e906c2e0ee340d6ec31eedbb9c
++Subproject commit 98d1f0681e7a9c40977ae938b8104f0e2e53e8f8
